@@ -3,6 +3,7 @@
 #include <string.h>
 
 void parseCapture(FILE *psychicCapture);
+float hexToFloat(unsigned char *charArray);
 
 typedef struct pscyhicPacket
 {
@@ -12,6 +13,7 @@ typedef struct pscyhicPacket
 	unsigned char *ipv4Header;
 	unsigned char *udpHeader;
 	unsigned char *zergHeader;
+	unsigned char *payload;
 }psychicPacket;
 
 int main(int argc, char *argv[])
@@ -74,54 +76,98 @@ void parseCapture(FILE *psychicCapture)
 				}
 				zergHeaderLength -= 8;
 				input.zergHeader = malloc(sizeof(char) * zergHeaderLength);	
+				input.payload = malloc(sizeof(char) * zergHeaderLength - 12);
 			}
 		}
 		else
 		{
-			input.zergHeader[i - 82] = *buff;
+			if(i < 94)
+			{
+				input.zergHeader[i - 82] = *buff;
+			}
+			else
+			{
+				input.payload[i - 94] = *buff;
+			}
 		}
 		i++;
 	}
-	printf("file:\n");
-	for(unsigned int i = 0; i < 24; i++)
+	char messageType = input.zergHeader[0] & 15;
+	char version = input.zergHeader[0] & 16;
+	int senderId = 0;
+	int receiverId = 0;
+	int sequenceNum = 0;
+	if(version == 16)
 	{
-		printf("%x\n", input.fileHeader[i]);
+		printf("Version: 1\n");
 	}
-	printf("packet:\n");
-	for(unsigned int i = 0; i < 16; i++)
+	else
 	{
-		printf("%x\n", input.packetHeader[i]);
+		printf("Version: Unknown\n");
 	}
-	printf("Ethernet: \n");
-	for(unsigned int i = 0; i < 16; i++)
+	for(int i = 4; i < 6; i++)
 	{
-		printf("%x\n", input.ethernetFrame[i]);
+		senderId = senderId << 8;
+		senderId |= input.zergHeader[i]; 
+	
 	}
-	printf("IPV4: \n");
-	for(unsigned int i = 0; i < 20; i++)
+	for(int i = 6; i < 8; i++)
 	{
-		printf("%x\n", input.ipv4Header[i]);
+		receiverId = receiverId << 8;
+		receiverId |= input.zergHeader[i];
 	}
-	printf("\n");
-	printf("UDP:\n");
-	for(unsigned int i = 0; i < 8; i++)
+	for(int i = 8; i < 12; i++)
 	{
-		printf("%x\n", input.udpHeader[i]);
+		sequenceNum =  sequenceNum << 8;
+		sequenceNum |= input.zergHeader[i];
 	}
-	printf("Zerg:\n");
-	for(unsigned int i = 0; i < zergHeaderLength; i++)
-	{
-		printf("%i\n", input.zergHeader[i]);
-	}
-	char type;
-	type = input.zergHeader[0] &= 15;
-	switch(type)
+	printf("Sequence Num: %d\n", sequenceNum);
+	printf("Sender ID: %d\n", senderId);
+	printf("Receiver ID: %d\n", receiverId);
+	printf("Message type: ");
+	switch(messageType)
 	{
 		case(0):
 			printf("Message\n");
+			printf("%s\n", input.payload);
 			break;
 		case(1):
 			printf("Status\n");
+			const char *zergTypes[] = {"Overmind", "Larva", "Cerebrate", "Overlord", "Queen",
+			"Drone", "Zergling", "Lurker", "Brooding", "Hydralisk", "Guardian", 
+			"Scourge", "Ultralisk", "Mutalisk", "Defiler", "Devourer"};
+			int health = 0;
+			int maxHealth = 0;
+			int armor = input.payload[3];
+			unsigned int type = input.payload[7];
+			unsigned char speedArray[4];
+			for(int i = 0; i < 3; i++)
+			{
+				health += input.payload[i];
+			}
+			for(int i = 4; i < 7; i++)
+			{
+				maxHealth += input.payload[i];
+			}
+			int j = 0;
+			for(int i = 8; i < 12; i++)
+			{
+				speedArray[j] = input.payload[i];
+				j++;
+			}
+			j = 0;
+			char *name = malloc(sizeof(char) * (zergHeaderLength - 24));
+			for(unsigned int i = 12; i < zergHeaderLength - 12; i++)
+			{
+				name[j] = input.payload[i];
+				j++;
+			}
+			float speed = hexToFloat(speedArray);
+			printf("Name: %s\n", name);
+			printf("Type: %s\n", zergTypes[type]);
+			printf("Speed: %f m\\s\n", speed);
+			printf("Health: %d/%d\n", health, maxHealth);
+			printf("Armor: %d\n", armor);
 			break;
 		case(2):
 			printf("command\n");
@@ -131,4 +177,17 @@ void parseCapture(FILE *psychicCapture)
 			break;
 	}
 	free(input.fileHeader);
+}
+
+float hexToFloat(unsigned char *charArray)
+{
+	unsigned long bitFloat = 0;
+	for(int i = 0; i < 4; i++)
+	{
+		bitFloat = bitFloat << 8;
+		bitFloat |= charArray[i];	
+	}
+	float myFloat = 0.0;
+	memcpy(&myFloat, &bitFloat, sizeof(float));
+	return myFloat;
 }
