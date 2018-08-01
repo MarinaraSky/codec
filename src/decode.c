@@ -5,6 +5,7 @@
 void parseCapture(FILE *psychicCapture);
 float hexToFloat(unsigned char *charArray);
 double longHexToDouble(unsigned char *charArray);
+unsigned char *printZerg(unsigned char *zergHeader);
 
 typedef struct pscyhicPacket
 {
@@ -29,8 +30,7 @@ int main(int argc, char *argv[])
 			exit(1);
 		}
 		parseCapture(psychicCapture);
-		
-
+		fclose(psychicCapture);
 	}
 	return 0;
 }
@@ -39,17 +39,21 @@ void parseCapture(FILE *psychicCapture)
 {
 	int buff[2];
 	int i = 0;
+	unsigned int j = 0;
 	psychicPacket input;
-	input.fileHeader = calloc(sizeof(char) * 24, 1);
-	input.packetHeader = calloc(sizeof(char) * 16, 1);
-	input.ethernetFrame = calloc(sizeof(char) * 16, 1);
-	input.ipv4Header = calloc(sizeof(char) * 20, 1);
-	input.udpHeader = calloc(sizeof(char) * 8, 1);
-	unsigned int zergHeaderLength = 0;
+	//input.fileHeader = calloc(sizeof(char) * 24, 1);
+	//input.packetHeader = calloc(sizeof(char) * 16, 1);
+	//input.ethernetFrame = calloc(sizeof(char) * 16, 1);
+	//input.ipv4Header = calloc(sizeof(char) * 20, 1);
+	input.udpHeader = malloc(8);
+	input.zergHeader = calloc(8, 1);
+	unsigned int zergHeaderLength = 8;
+	unsigned int multiplier = 1;
 
 	while(!feof(psychicCapture))
 	{
 		fread(buff, 1, 1, psychicCapture);
+		/*
 		if(i < 24)
 		{
 			input.fileHeader[i] = *buff;	
@@ -66,7 +70,7 @@ void parseCapture(FILE *psychicCapture)
 		{
 			input.ipv4Header[i - 56] = *buff;
 		}
-		else if(i < 82)
+		if(i > 74 && i < 82)
 		{
 			input.udpHeader[i - 74] = *buff;
 			if(i - 74 == 5)
@@ -75,29 +79,54 @@ void parseCapture(FILE *psychicCapture)
 				{
 					zergHeaderLength += input.udpHeader[j];
 				}
+				input.zergHeader = malloc(zergHeaderLength);
 				zergHeaderLength -= 8;
-				input.zergHeader = malloc(sizeof(char) * zergHeaderLength);	
-				input.payload = malloc(sizeof(char) * zergHeaderLength - 12);
 			}
 		}
-		else
+		*/
+		if (i > 81)
 		{
-			if(i < 94)
+			input.zergHeader[j] = *buff;
+			if(i - 82 == 3)
 			{
-				input.zergHeader[i - 82] = *buff;
+				for(int x = 0; x < 4; x++)
+				{
+					zergHeaderLength = zergHeaderLength << 8;
+					zergHeaderLength |= input.zergHeader[x];
+				}
+				input.zergHeader = realloc(input.zergHeader,
+						zergHeaderLength * multiplier);
 			}
-			else
+			if(j == zergHeaderLength * multiplier)
 			{
-				input.payload[i - 94] = *buff;
-			}
+				multiplier++;
+				zergHeaderLength *= multiplier;
+				input.zergHeader = realloc(input.zergHeader,
+						zergHeaderLength);	
+			}	
+			j++;
 		}
 		i++;
 	}
-	char messageType = input.zergHeader[0] & 15;
-	char version = input.zergHeader[0] & 16;
+	unsigned char *zergHeaderBackup = input.zergHeader;
+	while(input.zergHeader != NULL)
+	{
+		input.zergHeader = printZerg(input.zergHeader);
+	}
+	exit(1);
+	free(input.udpHeader);
+	free(zergHeaderBackup);
+}
+
+unsigned char * printZerg(unsigned char *zergHeader)
+{
+	char messageType = zergHeader[0] & 15;
+	char version = zergHeader[0] & 16;
+	int zergPacketSize = 0;
 	int senderId = 0;
 	int receiverId = 0;
 	unsigned long int sequenceNum = 0;
+	int j = 0;
 	if(version == 16)
 	{
 		printf("Version: 1\n");
@@ -106,153 +135,178 @@ void parseCapture(FILE *psychicCapture)
 	{
 		printf("Version: Unknown\n");
 	}
+	for(int i = 1; i < 4; i++)
+	{
+		zergPacketSize = zergPacketSize << 8;
+		zergPacketSize |= zergHeader[i];
+	}
+	char *payload = malloc(sizeof(char) * zergPacketSize - 12);
 	for(int i = 4; i < 6; i++)
 	{
 		senderId = senderId << 8;
-		senderId |= input.zergHeader[i]; 
+		senderId |= zergHeader[i]; 
 	
 	}
 	for(int i = 6; i < 8; i++)
 	{
 		receiverId = receiverId << 8;
-		receiverId |= input.zergHeader[i];
+		receiverId |= zergHeader[i];
 	}
 	for(int i = 8; i < 12; i++)
 	{
 		sequenceNum =  sequenceNum << 8;
-		sequenceNum |= input.zergHeader[i];
+		sequenceNum |= zergHeader[i];
 	}
+	j = 0;
+	for(int i = 12; i < zergPacketSize; i++)
+	{
+		payload[j] = zergHeader[i];
+		j++;
+	}
+
+	printf("Packet Size: %d\n", zergPacketSize);
 	printf("Sequence Num: %ld\n", sequenceNum);
 	printf("Sender ID: %d\n", senderId);
 	printf("Receiver ID: %d\n", receiverId);
 	printf("Message type: ");
+	
 	switch(messageType)
 	{
 		case(0):
+			j = 0;
+			for(int i = 12; i < zergPacketSize; i++)
+			{
+				payload[j] = zergHeader[i];
+				j++;
+			}
+			payload[j] = 0;
 			printf("Message\n");
-			input.payload[strlen((char *)input.payload) - 1] = 0;
-			printf("%s\n", input.payload);
+			printf("%s\n", payload);
 			break;
 		case(1):
-			printf("Status\n");
-			const char *zergTypes[] = {"Overmind", "Larva", "Cerebrate", 
-			"Overlord", "Queen", "Drone", "Zergling", "Lurker", "Brooding",
-			"Hydralisk", "Guardian", "Scourge", "Ultralisk",
-			"Mutalisk", "Defiler", "Devourer"};
-			int health = 0;
-			int maxHealth = 0;
-			int armor = input.payload[3];
-			unsigned int type = input.payload[7];
-			unsigned char speedArray[4];
-			for(int i = 0; i < 3; i++)
 			{
-				health += input.payload[i];
+				printf("status\n");
+				const char *zergTypes[] = {"Overmind", "Larva", "Cerebrate",
+					"Overlord", "Queen", "Drone", "Zergling", "Lurker",
+					"Broodling", "Hydralisk", "Guardian", "Scourge",
+					"Ultralisk", "Mutalisk", "Defiler", "Devourer"};
+				int health = 0;
+				int maxHealth = 0;
+				int armor = payload[3];
+				unsigned int type = payload[7];
+				unsigned char speedArray[4];
+				for(int i = 0; i < 3; i++)
+				{
+					health += payload[i];
+				}
+				for(int i = 4; i < 7; i++)
+				{
+					maxHealth += payload[i];
+				}
+				j = 0;
+				for(int i = 8; i < 12; i++)
+				{
+					speedArray[j] = payload[i];
+					j++;
+				}
+				j = 0;
+				char *name = calloc((zergPacketSize), 1);
+				for(int i = 12; i < zergPacketSize; i++)
+				{	
+					name[j] = payload[i];
+					j++;
+				}
+				float unitSpeed = hexToFloat(speedArray);
+				printf("Name: %s\n", name);
+				printf("Type: %s\n", zergTypes[type]);
+				printf("Speed: %f m\\s\n", unitSpeed);
+				printf("Health: %d/%d\n", health, maxHealth);
+				printf("Armor: %d\n", armor);
+				free(name);
+				break;
 			}
-			for(int i = 4; i < 7; i++)
-			{
-				maxHealth += input.payload[i];
-			}
-			int j = 0;
-			for(int i = 8; i < 12; i++)
-			{
-				speedArray[j] = input.payload[i];
-				j++;
-			}
-			j = 0;
-			char *name = malloc(sizeof(char) * (zergHeaderLength - 24));
-			for(unsigned int i = 12; i < zergHeaderLength - 12; i++)
-			{
-				name[j] = input.payload[i];
-				j++;
-			}
-			float unitSpeed = hexToFloat(speedArray);
-			printf("Name: %s\n", name);
-			printf("Type: %s\n", zergTypes[type]);
-			printf("Speed: %f m\\s\n", unitSpeed);
-			printf("Health: %d/%d\n", health, maxHealth);
-			printf("Armor: %d\n", armor);
-			break;
 		case(2):
-			printf("command\n");
-			const char *commandList[] = {"GET_STATUS", "GOTO", "GET_GPS",
-				"RESERVED", "RETURN", "SET_GROUP", "STOP", "REPEAT"};
-			int command = 0;;
-			j = 0;
-			for(int i = 0; i < 2; i++)
 			{
-				command += input.payload[i];
-			}
-			printf("%s\n", commandList[command]);
-			if(command % 2 == 1)
-			{
-				unsigned char *param1 = malloc(sizeof(char) * 2);
-				unsigned char *param2 = malloc(sizeof(char) * 4);
+				printf("command\n");
+				const char *commandList[] = {"GET_STATUS", "GOTO", "GET_GPS",
+					"RESERVED", "RETURN", "SET_GROUP", "STOP", "REPEAT"};
+				int command = 0;;
 				j = 0;
-				for(int i = 2; i < 4; i++)
+				for(int i = 0; i < 2; i++)
 				{
-					param1[j] = input.payload[i];
-					j++;
+					command += payload[i];
 				}
-				j = 0;
-				for(int i = 4; i < 8; i++)
+				printf("%s\n", commandList[command]);
+				if(command % 2 == 1)
 				{
-					param2[j] = input.payload[i];
-					j++;
+					unsigned char *param1 = malloc(sizeof(char) * 2);
+					unsigned char *param2 = malloc(sizeof(char) * 4);
+					j = 0;
+					for(int i = 2; i < 4; i++)
+					{
+						param1[j] = payload[i];
+						j++;
+					}
+					j = 0;
+					for(int i = 4; i < 8; i++)
+					{
+						param2[j] = payload[i];
+						j++;
+					}	
+					switch(command)
+					{
+						case(1):
+							{
+								int distance = 0;
+								float newBearing = hexToFloat(param2);
+								for(int i = 0; i < 2; i++)
+								{
+									distance = distance << 8;
+									distance |= param1[i];
+								}
+								printf("Move %d meters in %f\n", distance, 
+										newBearing);
+								break;
+							}
+						case(5):
+							{
+								int addOrRemove = 0;
+								int groupId = 0;
+								for(int i = 0; i < 2; i++)
+								{
+									addOrRemove = addOrRemove << 8;
+									addOrRemove |= param1[i];
+								}
+								for(int i = 0; i < 4; i++)
+								{
+									groupId = groupId << 8;
+									groupId |= param2[i];
+								}
+								if(addOrRemove == 1)
+								{
+									printf("Add ");
+								}
+								else
+								{
+									printf("Remove ");
+								}
+								printf("unit from group %d\n", groupId);
+								break;
+							}
+						case(7):
+							{
+								int repeatSequenceId = 0;
+							
+								printf("Request resending of packet with ID: %d\n"
+										, repeatSequenceId);
+								break;
+							}
+						free(param1);
+						free(param2);
+					}
 				}	
-				switch(command)
-				{
-					case(1):
-						{
-							int distance = 0;
-							float newBearing = hexToFloat(param2);
-
-							for(int i = 0; i < 2; i++);
-							{
-								distance = distance << 8;
-								distance |= param1[i];
-							}
-							printf("Move %d meters in %f\n", distance, newBearing);
-							break;
-						}
-					case(5):
-						{
-							int addOrRemove = 0;
-							int groupId = 0;
-							for(int i = 0; i < 2; i++)
-							{
-								addOrRemove = addOrRemove << 8;
-								addOrRemove |= param1[i];
-							}
-							for(int i = 0; i < 4; i++)
-							{
-								groupId = groupId << 8;
-								groupId |= param2[i];
-							}
-							if(addOrRemove == 1)
-							{
-								printf("Add ");
-							}
-							else
-							{
-								printf("Remove ");
-							}
-							printf("unit from group %d\n", groupId);
-							break;
-						}
-					case(7):
-						{
-							int repeatSequenceId = 0;
-							for(int i = 0; i < 4; i++)
-							{
-								repeatSequenceId = repeatSequenceId << 8;
-								repeatSequenceId |= param2[i];
-							}
-							printf("Request resending of packet with ID: %d\n", repeatSequenceId);
-							break;
-						}
-				}
-			}
 			break;
+			}
 		case(3):
 			{
 				printf("GPS Message\n");
@@ -265,37 +319,37 @@ void parseCapture(FILE *psychicCapture)
 				j = 0;
 				for(int i = 0; i < 8; i ++)
 				{
-					longitude[j] = input.payload[i];	
+					longitude[j] = payload[i];	
 					j++;
 				}
 				j = 0;
 				for(int i = 8; i < 16; i++)
 				{
-					latitude[j] = input.payload[i];
+					latitude[j] = payload[i];
 					j++;
 				}
 				j = 0;
 				for(int i = 16; i < 20; i++)
 				{
-					altitude[j] = input.payload[i];
+					altitude[j] = payload[i];
 					j++;
 				}
 				j = 0;
 				for(int i = 20; i < 24; i++)
 				{
-					bearing[j] = input.payload[i];
+					bearing[j] = payload[i];
 					j++;
 				}
 				j = 0;
 				for(int i = 24; i < 28; i++)
 				{
-					travelSpeed[j] = input.payload[i];
+					travelSpeed[j] = payload[i];
 					j++;
 				}
 				j = 0;
 				for(int i = 28; i < 32; i++)
 				{
-					accuracy[j] = input.payload[i];
+					accuracy[j] = payload[i];
 					j++;
 				}
 	
@@ -319,8 +373,18 @@ void parseCapture(FILE *psychicCapture)
 	
 				break;
 			}
+		}
+	free(payload);
+	unsigned char *endOfCurrentPacket = NULL;
+	if(zergHeader[zergPacketSize + 62] != 0 && zergPacketSize < 17)
+	{
+		endOfCurrentPacket = zergHeader + zergPacketSize + 62;
 	}
-	free(input.fileHeader);
+	else if(zergHeader[zergPacketSize + 58] != 0)
+	{
+		endOfCurrentPacket = zergHeader + zergPacketSize + 58;
+	}
+	return endOfCurrentPacket;
 }
 
 float hexToFloat(unsigned char *charArray)
