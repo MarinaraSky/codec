@@ -67,10 +67,32 @@ typedef struct udpHeader
 	short checksum;
 }udpHeader;
 
+typedef struct payload
+{
+	int currHitPoints :24;
+	unsigned char armor;
+	int maxHitPoints :24;
+	char type;
+	float speed;
+}payload;
+
+typedef struct cPayload 
+{
+	short command;
+	unsigned short param1;
+	union param2
+	{
+		float fParam2;
+		int iParam2;
+	}param2;
+}cPayload;
+
 void readZerg(FILE *source, FILE *dest);
 void checkEntry(char string[16], int input, zergPacket *packet);
 void pickPacketType(FILE *source, FILE *dest, zergPacket *packet);
 void writeMessage(FILE *source, FILE *dest);
+void writeStatus(FILE *source, FILE *dest);
+void writeCommand(FILE *source, FILE *dest);
 void writePcapHeader(FILE *dest);
 void writePcapPacket(FILE *dest, int zergLength);
 void writeEtherHeader(FILE *dest);
@@ -160,18 +182,22 @@ void pickPacketType(FILE *source, FILE *dest, zergPacket *packet)
 			}
 		case(1):
 			{
-				printf("Status\n");
+				writeStatus(source, dest);
 				break;
 			}
 		case(2):
 			{
-				printf("Command\n");
+				writeCommand(source, dest);
 				break;
 			}
 		case(3):
 			{
 				printf("GPS\n");
 				break;
+			}
+		default:
+			{
+				printf("Not Found\n");
 			}
 	}
 }
@@ -184,7 +210,96 @@ void writeMessage(FILE *source, FILE *dest)
 	{
 		grab = fgetc(source);
 		fputc(grab, dest);
-	} }
+	} 
+}
+
+void writeStatus(FILE *source, FILE *dest)
+{
+	char string[16];
+	int health = 0;
+	int maxHealth = 0;
+	int type = 0;
+	int armor = 0;
+	payload *status = calloc(sizeof(payload), 1);
+
+	for(int i = 0; i < 9; i++)
+	{
+		fscanf(source, "%s", string);
+		if(strcmp("Type:", string) == 0)
+		{
+			fscanf(source, "%d", &type);
+			status->type = type & 0xff;
+		}
+		else if(strcmp("Speed:", string) == 0)
+		{
+			union speed
+			{
+				float fSpeed;
+				int iSpeed;
+			};
+			union speed s;
+			fscanf(source, "%s", string);
+			s.fSpeed = strtof(string, NULL);
+			s.iSpeed = htonl(s.iSpeed);
+			status->speed = s.fSpeed;
+		}	
+		if(strcmp("Health:", string) == 0)
+		{
+			fscanf(source, "%d/%d", &health, &maxHealth);
+			status->currHitPoints |= health;
+			status->maxHitPoints |= maxHealth;
+			status->currHitPoints = rotate3ByteInt(status->currHitPoints);
+			status->maxHitPoints = rotate3ByteInt(status->maxHitPoints);
+		}
+		else if(strcmp("Armor:", string) == 0)
+		{
+			fscanf(source, "%d", &armor);
+			status->armor = armor & 0xff;
+			fwrite(status, sizeof(int) * 3, 1, dest);
+		}
+		else if(strcmp("Name:", string) == 0)
+		{
+			char grab = 0;
+			fseek(source, 1, SEEK_CUR);
+			for(int i = 0; i <= zergPayloadSize - 12; i++)
+			{
+				grab = fgetc(source);
+				fputc(grab, dest);
+			}
+			free(status);
+			return;
+		}
+	}
+}
+
+void writeCommand(FILE *source, FILE *dest)
+{
+	char string[16];
+	short int input = 0;
+	char garbage[16];
+	cPayload *command = calloc(sizeof(cPayload), 1);	
+	fscanf(source, "%s %hd %s", string, &input, garbage);
+	if(strcmp("Command:", string) == 0)
+	{
+		command->command = htons(input);
+	}		
+	switch(htons(command->command))
+	{
+		case(1):
+			fscanf(source, "%s %hd", string, &input);
+			command->param1 = htons(input);
+			float fInput = 0.0;
+			fscanf(source, "%s %f", string, &fInput);
+			command->param2.fParam2 = fInput;
+			command->param2.iParam2 = htonl(command->param2.iParam2);
+			fwrite(command, sizeof(int) * 2, 1, dest); 
+			break;
+		case(5):
+
+		case(7):
+			break;
+	}
+}
 
 void writePcapHeader(FILE *dest)
 {
