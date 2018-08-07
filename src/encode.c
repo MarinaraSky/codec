@@ -677,7 +677,6 @@ int validateHeader(zergPacket *packet)
 		packet-> sourceId == 0 || packet->destinationId == 0 || 
 		packet->sequenceId == 0)
 	{
-		printf("%d %d %d %d %d\n", packet->version, packet->totalLength, packet->sourceId, packet->destinationId, packet->sequenceId);
 		fileCorruption();
 	}
 	return 1;
