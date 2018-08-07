@@ -122,24 +122,43 @@ typedef struct gpsPayload
 	}accuracy;
 }gpsPayload;
 
+/* Read Zerg Header and send to parsing function */
 void readZerg(FILE *source, FILE *dest);
+/* Collects information about packet */
 void checkEntry(char string[16], unsigned int input, zergPacket *packet);
+/* Chooses the type of packet */
 void pickPacketType(FILE *source, FILE *dest, zergPacket *packet);
+/* Writes the packet to a file if its a message */
 void writeMessage(FILE *source, FILE *dest);
+/* Writes the packet to a file if its a status */
 void writeStatus(FILE *source, FILE *dest);
+/* Writes the packet to a file if its a command */
 void writeCommand(FILE *source, FILE *dest);
+/* Writes the packet to a file if its a GPS */
 void writeGPS(FILE *source, FILE *dest);
+/* Writes the Pcap Header to file */
 void writePcapHeader(FILE *dest);
+/* Writes the Pcap Packet to file */
 void writePcapPacket(FILE *dest, int zergLength);
+/* Writes the Ether Header to file */
 void writeEtherHeader(FILE *dest);
+/* Writes the Ipv4 Header to file */
 void writeIpv4Header(FILE *dest, int zergLength);
+/* Writes the UDP Header to file */
 void writeUdpHeader(FILE *dest, int zergLength);
+/* Writes the Zerg Header to file */
 void writeZergHeader(FILE *dest, zergPacket *packet);
+/* Rotates a 3 byte integer endianess */
 int rotate3ByteInt(int swap);
+/* Reverses the rotation */
 int rotateBack(int swap);
-int rotate4ByteInt(int swap);
+/* Used to exit if anything goes wrong with reading the file */
+void fileCorruption(void);
+/* Used to check if there are invalid inputs in Zerg Header */
+int validateHeader(zergPacket *packet);
 
 static int zergPayloadSize = 0;
+static int fscanNum = 0;
 
 int main(int argc, char *argv[])
 {
@@ -148,15 +167,30 @@ int main(int argc, char *argv[])
 		FILE *dest;
 		FILE *source;
 		dest = fopen(argv[2], "wb");
-		source = fopen(argv[1], "r");
-		writePcapHeader(dest);
-		while(!feof(source))
+		if(dest == NULL)
 		{
+			printf("Could not open %s. Exiting.\n", argv[2]);
+			exit(1);
+		}
+		source = fopen(argv[1], "r");
+		if(source == NULL)
+		{
+			printf("Could not open %s. Exiting.\n", argv[1]);
+			exit(1);
+		}
+		writePcapHeader(dest);
+		do
+		{
+			fscanNum = 0;
 			zergPayloadSize = 0;
 			readZerg(source, dest);
-		}
+		}while(!feof(source));
 		fclose(dest);
 		fclose(source);
+	}
+	else
+	{
+		printf("Usage: ./encode [Source] [Destination]\n");
 	}
 	return 0;
 }
@@ -164,17 +198,25 @@ int main(int argc, char *argv[])
 void readZerg(FILE *source, FILE *dest)
 {
 	zergPacket *packet = calloc(sizeof(zergPacket), 1);
+	if(packet == NULL)
+	{
+		printf("Unable to allocate memory. Quitting.\n");	
+		exit(1);
+	}
 	int readHeader = 0;
+	char string[16] = "";
+	unsigned int input = 0;
 	while(readHeader < 7)
 	{
-		char string[16];
-		unsigned int input = 0;
 		fscanf(source, "%s %u", string, &input);
 		checkEntry(string, input, packet);
 		readHeader++;
 	}
-	pickPacketType(source, dest, packet);
-	free(packet);
+	if(validateHeader(packet))
+	{
+		pickPacketType(source, dest, packet);
+		free(packet);
+	}
 }
 
 void checkEntry(char string[16], unsigned int input, zergPacket *packet)
@@ -206,8 +248,7 @@ void checkEntry(char string[16], unsigned int input, zergPacket *packet)
 	}
 }
 
-void pickPacketType(FILE *source, FILE *dest, zergPacket *packet)
-{
+void pickPacketType(FILE *source, FILE *dest, zergPacket *packet) {
 	writePcapPacket(dest, packet->totalLength);
 	writeEtherHeader(dest);
 	writeIpv4Header(dest, packet->totalLength);
@@ -249,6 +290,10 @@ void writeMessage(FILE *source, FILE *dest)
 	for(int i = 0; i <= zergPayloadSize; i++)
 	{
 		grab = fgetc(source);
+		if(grab == EOF)
+		{
+			fileCorruption();
+		}
 		fputc(grab, dest);
 	} 
 }
@@ -261,13 +306,26 @@ void writeStatus(FILE *source, FILE *dest)
 	int type = 0;
 	int armor = 0;
 	payload *status = calloc(sizeof(payload), 1);
+	if(status == NULL)
+	{
+		printf("Cannot allocate memory\n");
+		exit(1);
+	}
 
 	for(int i = 0; i < 9; i++)
 	{
-		fscanf(source, "%s", string);
+		fscanNum = fscanf(source, "%s", string);
+		if(fscanNum != 1)
+		{
+			fileCorruption();
+		}
 		if(strcmp("Type:", string) == 0)
 		{
-			fscanf(source, "%d", &type);
+			fscanNum = fscanf(source, "%d", &type);
+			if(fscanNum != 1)
+			{
+				fileCorruption();
+			}
 			status->type = type & 0xff;
 		}
 		else if(strcmp("Speed:", string) == 0)
@@ -278,14 +336,22 @@ void writeStatus(FILE *source, FILE *dest)
 				int iSpeed;
 			};
 			union speed s;
-			fscanf(source, "%s", string);
+			fscanNum = fscanf(source, "%s", string);
+			if(fscanNum != 1)
+			{
+				fileCorruption();
+			}
 			s.fSpeed = strtof(string, NULL);
 			s.iSpeed = htonl(s.iSpeed);
 			status->speed = s.fSpeed;
 		}	
 		if(strcmp("Health:", string) == 0)
 		{
-			fscanf(source, "%d/%d", &health, &maxHealth);
+			fscanNum = fscanf(source, "%d/%d", &health, &maxHealth);
+			if(fscanNum != 2)
+			{
+				fileCorruption();
+			}
 			status->currHitPoints |= health;
 			status->maxHitPoints |= maxHealth;
 			status->currHitPoints = rotate3ByteInt(status->currHitPoints);
@@ -293,7 +359,11 @@ void writeStatus(FILE *source, FILE *dest)
 		}
 		else if(strcmp("Armor:", string) == 0)
 		{
-			fscanf(source, "%d", &armor);
+			fscanNum = fscanf(source, "%d", &armor);
+			if(fscanNum != 1)
+			{
+				fileCorruption();
+			}
 			status->armor = armor & 0xff;
 			fwrite(status, sizeof(int) * 3, 1, dest);
 		}
@@ -304,6 +374,11 @@ void writeStatus(FILE *source, FILE *dest)
 			for(int i = 0; i <= zergPayloadSize - 12; i++)
 			{
 				grab = fgetc(source);
+				if(grab == EOF)
+				{
+					printf("here\n");
+					fileCorruption();
+				}
 				fputc(grab, dest);
 			}
 			free(status);
@@ -315,11 +390,20 @@ void writeStatus(FILE *source, FILE *dest)
 void writeCommand(FILE *source, FILE *dest)
 {
 	char string[16];
+	char garbage[16];
 	short int input = 0;
 	int intInput = 0;
-	char garbage[16];
 	cPayload *command = calloc(sizeof(cPayload), 1);	
-	fscanf(source, "%s %hd %s", string, &input, garbage);
+	if(command == NULL)
+	{
+		printf("Cannot allocate memory\n");
+		exit(1);
+	}
+	fscanNum = fscanf(source, "%s %hd %s", string, &input, garbage);
+	if(fscanNum != 3)
+	{
+		fileCorruption();
+	}
 	if(strcmp("Command:", string) == 0)
 	{
 		command->command = htons(input);
@@ -327,23 +411,43 @@ void writeCommand(FILE *source, FILE *dest)
 	switch(htons(command->command))
 	{
 		case(1):
-			fscanf(source, "%s %hd", string, &input);
+			fscanNum = fscanf(source, "%s %hd", string, &input);
+			if(fscanNum != 2)
+			{
+				fileCorruption();
+			}
 			command->param1 = htons(input);
 			float fInput = 0.0;
-			fscanf(source, "%s %f", string, &fInput);
+			fscanNum = fscanf(source, "%s %f", string, &fInput);
+			if(fscanNum != 2)
+			{
+				fileCorruption();
+			}
 			command->param2.fParam2 = fInput;
 			command->param2.iParam2 = htonl(command->param2.iParam2);
 			fwrite(command, sizeof(int) * 2, 1, dest); 
 			break;
 		case(5):
-			fscanf(source, "%s %hd", string, &input);
+			fscanNum = fscanf(source, "%s %hd", string, &input);
+			if(fscanNum != 2)
+			{
+				fileCorruption();
+			}
 			command->param1 = htons(input & 0x1);
-			fscanf(source, "%s %d", string, &intInput);
+			fscanNum = fscanf(source, "%s %d", string, &intInput);
+			if(fscanNum != 2)
+			{
+				fileCorruption();
+			}
 			command->param2.iParam2 = htonl(intInput);
 			fwrite(command, sizeof(int) * 2, 1, dest);
 			break;
 		case(7):
-			fscanf(source, "%s %d", string, &intInput);
+			fscanNum = fscanf(source, "%s %d", string, &intInput);
+			if(fscanNum != 2)
+			{
+				fileCorruption();
+			}
 			command->param2.iParam2 = htonl(intInput);
 			fwrite(command, sizeof(int) * 2, 1, dest);
 			break;
@@ -351,6 +455,7 @@ void writeCommand(FILE *source, FILE *dest)
 			fwrite(command, sizeof(char) * 6, 1, dest);
 			break;
 	}
+	free(command);
 }
 
 void writeGPS(FILE *source, FILE *dest)
@@ -360,45 +465,82 @@ void writeGPS(FILE *source, FILE *dest)
 	float fInput = 0.0;
 	char garbage[16];
 	gpsPayload *gpsCoords = calloc(sizeof(gpsPayload), 1);
+	if(gpsCoords == NULL)
+	{
+		printf("Cannot allocate memory\n");
+		exit(1);
+	}
 
 	for(int i = 0; i < 6; i++)
 	{
-		fscanf(source, "%s", string);
+		fscanNum = fscanf(source, "%s", string);
+		if(fscanNum != 1)
+		{
+			fileCorruption();
+		}
 		if(strcmp("Long:", string) == 0)
 		{
-			fscanf(source, "%lf", &dInput);
+			fscanNum = fscanf(source, "%lf", &dInput);
+			if(fscanNum != 1)
+			{
+				fileCorruption();
+			}
 			gpsCoords->longitude.dLong = dInput;
-			gpsCoords->longitude.iLong = bswap_64(gpsCoords->longitude.iLong);
+			gpsCoords->longitude.iLong = 
+				bswap_64(gpsCoords->longitude.iLong);
 		}
 		else if(strcmp("Lat:", string) == 0)
 		{
-			fscanf(source, "%lf", &dInput);
+			fscanNum = fscanf(source, "%lf", &dInput);
+			if(fscanNum != 1)
+			{
+				fileCorruption();
+			}
 			gpsCoords->latitude.dLat = dInput;
 			gpsCoords->latitude.iLat = bswap_64(gpsCoords->latitude.iLat);
 		}
 		else if(strcmp("Alt:", string) == 0)
 		{
 			fscanf(source, "%f %s", &fInput, garbage);
+			if(fscanNum != 2)
+			{
+				fileCorruption();
+			}
 			gpsCoords->altitude.fAltitude = fInput;
-			gpsCoords->altitude.iAltitude = htonl(gpsCoords->altitude.iAltitude);
+			gpsCoords->altitude.iAltitude = 
+				htonl(gpsCoords->altitude.iAltitude);
 		}
 		else if(strcmp("Bearing:", string) == 0)
 		{
-			fscanf(source, "%f %s", &fInput, garbage);
+			fscanNum = fscanf(source, "%f %s", &fInput, garbage);
+			if(fscanNum != 2)
+			{
+				fileCorruption();
+			}
 			gpsCoords->bearing.fBearing = fInput;
-			gpsCoords->bearing.iBearing = htonl(gpsCoords->bearing.iBearing);
+			gpsCoords->bearing.iBearing = 
+				htonl(gpsCoords->bearing.iBearing);
 		}
 		else if(strcmp("Speed:", string) == 0)
 		{
-			fscanf(source, "%f %s", &fInput, garbage);
+			fscanNum = fscanf(source, "%f %s", &fInput, garbage);
+			if(fscanNum != 2)
+			{
+				fileCorruption();
+			}
 			gpsCoords->speed.fSpeed = fInput;
 			gpsCoords->speed.iSpeed = htonl(gpsCoords->speed.iSpeed);
 		}	
 		else if(strcmp("Acc:", string) == 0)
 		{
-			fscanf(source, "%f %s", &fInput, garbage);
+			fscanNum = fscanf(source, "%f %s", &fInput, garbage);
+			if(fscanNum != 2)
+			{
+				fileCorruption();
+			}
 			gpsCoords->accuracy.fAccuracy = fInput;
-			gpsCoords->accuracy.iAccuracy = htonl(gpsCoords->accuracy.iAccuracy);
+			gpsCoords->accuracy.iAccuracy = 
+				htonl(gpsCoords->accuracy.iAccuracy);
 		}	
 		else
 		{
@@ -407,11 +549,18 @@ void writeGPS(FILE *source, FILE *dest)
 		}
 	}
 	fwrite(gpsCoords, sizeof(int) * 8, 1, dest);
+	free(gpsCoords);
 }
 
 void writePcapHeader(FILE *dest)
 {
 	pcapFileHeader *header = calloc(sizeof(pcapFileHeader), 1);
+	if(header == NULL)
+	{
+		printf("Cannot allocate memory\n");
+		exit(1);
+	}
+
 	header->fileTypeId = 0xa1b2c3d4;
 	header->majorVersion = 0x2;
 	header->minorVersion = 0x4;
@@ -426,6 +575,12 @@ void writePcapHeader(FILE *dest)
 void writePcapPacket(FILE *dest, int zergLength)
 {
 	pcapPacketHeader *header = calloc(sizeof(pcapPacketHeader), 1);
+	if(header == NULL)
+	{
+		printf("Cannot allocate memory\n");
+		exit(1);
+	}
+
 	header->unixEpoch = 0x11111111;
 	header->microEpoch = 0x11111111;
 	header->lengthOfData = zergLength + 42;
@@ -437,6 +592,12 @@ void writePcapPacket(FILE *dest, int zergLength)
 void writeEtherHeader(FILE *dest)
 {
 	ethernetHeader *header = calloc(sizeof(ethernetHeader), 1);
+	if(header == NULL)
+	{
+		printf("Cannot allocate memory\n");
+		exit(1);
+	}
+
 	header->etherType = 0x8;
 	fwrite(header, sizeof(char) * 14, 1, dest);
 	free(header);
@@ -445,6 +606,12 @@ void writeEtherHeader(FILE *dest)
 void writeIpv4Header(FILE *dest, int zergLength)
 {
 	ipv4Header *header = calloc(sizeof(ipv4Header), 1);
+	if(header == NULL)
+	{
+		printf("Cannot allocate memory\n");
+		exit(1);
+	}
+
 	header->version = 0x4;
 	header->ipHeaderLength = 0x5;
 	header->ipLength = htons(zergLength + 28);
@@ -457,6 +624,12 @@ void writeIpv4Header(FILE *dest, int zergLength)
 void writeUdpHeader(FILE *dest, int zergLength)
 {
 	udpHeader *header = calloc(sizeof(udpHeader), 1);	
+	if(header == NULL)
+	{
+		printf("Cannot allocate memory\n");
+		exit(1);
+	}
+
 	header->destPort = htons(0xea7);
 	header->length = htons(zergLength + 8);
 	header->checksum = 0xefbe;
@@ -483,4 +656,29 @@ int rotateBack(int swap)
 {
 	swap = ((swap << 16) + (swap & 0xff00) + (swap & 0xff)) >> 16;
 	return swap;
+}
+
+void fileCorruption(void)
+{
+	printf("Unexpected data found in source document. Exiting.\n");
+	exit(2);
+}
+
+int validateHeader(zergPacket *packet)
+{
+	if( packet->version == 0 && packet->totalLength == 0 && 
+		packet-> sourceId == 0 && packet->destinationId == 0 && 
+		packet->sequenceId == 0)
+	{
+		free(packet);
+		return 0;
+	}
+	else if( packet->version == 0 || packet->totalLength == 0 || 
+		packet-> sourceId == 0 || packet->destinationId == 0 || 
+		packet->sequenceId == 0)
+	{
+		printf("%d %d %d %d %d\n", packet->version, packet->totalLength, packet->sourceId, packet->destinationId, packet->sequenceId);
+		fileCorruption();
+	}
+	return 1;
 }
