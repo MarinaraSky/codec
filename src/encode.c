@@ -2,6 +2,7 @@
 #include <string.h>
 #include <stdlib.h>
 #include <arpa/inet.h>
+#include <byteswap.h>
 
 #define MESSAGE	0x01
 #define STATUS	0x02
@@ -15,7 +16,7 @@ typedef struct zergPacket
 	int totalLength :24;
 	short sourceId;
 	short destinationId;
-	int sequenceId;
+	unsigned int sequenceId;
 }zergPacket;
 
 typedef struct pcapFileHeader
@@ -87,12 +88,47 @@ typedef struct cPayload
 	}param2;
 }cPayload;
 
+typedef struct gpsPayload
+{
+	union longitude
+	{
+		double dLong;
+		long long iLong;
+	}longitude;
+	union latitude
+	{
+		double dLat;
+		long long iLat;
+	}latitude;
+	union altitude
+	{
+		float fAltitude;
+		int iAltitude;
+	}altitude;
+	union bearing
+	{
+		float fBearing;
+		int iBearing;
+	}bearing;
+	union speed
+	{
+		float fSpeed;
+		int iSpeed;
+	}speed;
+	union accuracy
+	{
+		float fAccuracy;
+		int iAccuracy;
+	}accuracy;
+}gpsPayload;
+
 void readZerg(FILE *source, FILE *dest);
-void checkEntry(char string[16], int input, zergPacket *packet);
+void checkEntry(char string[16], unsigned int input, zergPacket *packet);
 void pickPacketType(FILE *source, FILE *dest, zergPacket *packet);
 void writeMessage(FILE *source, FILE *dest);
 void writeStatus(FILE *source, FILE *dest);
 void writeCommand(FILE *source, FILE *dest);
+void writeGPS(FILE *source, FILE *dest);
 void writePcapHeader(FILE *dest);
 void writePcapPacket(FILE *dest, int zergLength);
 void writeEtherHeader(FILE *dest);
@@ -128,8 +164,8 @@ void readZerg(FILE *source, FILE *dest)
 	while(readHeader < 7)
 	{
 		char string[16];
-		int input = 0;
-		fscanf(source, "%s %d", string, &input);
+		unsigned int input = 0;
+		fscanf(source, "%s %u", string, &input);
 		checkEntry(string, input, packet);
 		readHeader++;
 	}
@@ -137,7 +173,7 @@ void readZerg(FILE *source, FILE *dest)
 	free(packet);
 }
 
-void checkEntry(char string[16], int input, zergPacket *packet)
+void checkEntry(char string[16], unsigned int input, zergPacket *packet)
 {
 	if(strcmp("Version:", string) == 0)
 	{
@@ -192,7 +228,7 @@ void pickPacketType(FILE *source, FILE *dest, zergPacket *packet)
 			}
 		case(3):
 			{
-				printf("GPS\n");
+				writeGPS(source, dest);
 				break;
 			}
 		default:
@@ -276,6 +312,7 @@ void writeCommand(FILE *source, FILE *dest)
 {
 	char string[16];
 	short int input = 0;
+	int intInput = 0;
 	char garbage[16];
 	cPayload *command = calloc(sizeof(cPayload), 1);	
 	fscanf(source, "%s %hd %s", string, &input, garbage);
@@ -295,10 +332,77 @@ void writeCommand(FILE *source, FILE *dest)
 			fwrite(command, sizeof(int) * 2, 1, dest); 
 			break;
 		case(5):
-
+			fscanf(source, "%s %hd", string, &input);
+			command->param1 = htons(input & 0x1);
+			fscanf(source, "%s %d", string, &intInput);
+			command->param2.iParam2 = htonl(intInput);
+			fwrite(command, sizeof(int) * 2, 1, dest);
+			break;
 		case(7):
+			fscanf(source, "%s %d", string, &intInput);
+			command->param2.iParam2 = htonl(intInput);
+			fwrite(command, sizeof(int) * 2, 1, dest);
+			break;
+		default:
+			fwrite(command, sizeof(char) * 2, 1, dest);
 			break;
 	}
+}
+
+void writeGPS(FILE *source, FILE *dest)
+{
+	char string[16];
+	double dInput = 0.0;
+	float fInput = 0.0;
+	char garbage[16];
+	gpsPayload *gpsCoords = calloc(sizeof(gpsPayload), 1);
+
+	for(int i = 0; i < 6; i++)
+	{
+		fscanf(source, "%s", string);
+		if(strcmp("Long:", string) == 0)
+		{
+			fscanf(source, "%lf", &dInput);
+			gpsCoords->longitude.dLong = dInput;
+			gpsCoords->longitude.iLong = bswap_64(gpsCoords->longitude.iLong);
+		}
+		else if(strcmp("Lat:", string) == 0)
+		{
+			fscanf(source, "%lf", &dInput);
+			gpsCoords->latitude.dLat = dInput;
+			gpsCoords->latitude.iLat = bswap_64(gpsCoords->latitude.iLat);
+		}
+		else if(strcmp("Alt:", string) == 0)
+		{
+			fscanf(source, "%f %s", &fInput, garbage);
+			gpsCoords->altitude.fAltitude = fInput;
+			gpsCoords->altitude.iAltitude = htonl(gpsCoords->altitude.iAltitude);
+		}
+		else if(strcmp("Bearing:", string) == 0)
+		{
+			fscanf(source, "%f %s", &fInput, garbage);
+			gpsCoords->bearing.fBearing = fInput;
+			gpsCoords->bearing.iBearing = htonl(gpsCoords->bearing.iBearing);
+		}
+		else if(strcmp("Speed:", string) == 0)
+		{
+			fscanf(source, "%f %s", &fInput, garbage);
+			gpsCoords->speed.fSpeed = fInput;
+			gpsCoords->speed.iSpeed = htonl(gpsCoords->speed.iSpeed);
+		}	
+		else if(strcmp("Acc:", string) == 0)
+		{
+			fscanf(source, "%f %s", &fInput, garbage);
+			gpsCoords->accuracy.fAccuracy = fInput;
+			gpsCoords->accuracy.iAccuracy = htonl(gpsCoords->accuracy.iAccuracy);
+		}	
+		else
+		{
+			printf("Something's not right here. Exiting.");
+			exit(1);
+		}
+	}
+	fwrite(gpsCoords, sizeof(int) * 8, 1, dest);
 }
 
 void writePcapHeader(FILE *dest)
@@ -359,16 +463,10 @@ void writeZergHeader(FILE *dest, zergPacket *packet)
 	packet->totalLength = rotate3ByteInt(packet->totalLength);
 	packet->sourceId = htons(packet->sourceId);
 	packet->destinationId = htons(packet->destinationId);
-	packet->sequenceId = rotate4ByteInt(packet->sequenceId);
+	packet->sequenceId = htonl(packet->sequenceId);
 	fwrite(packet, sizeof(int) * 3, 1, dest);
 }
 
-int rotate4ByteInt(int swap)
-{
-	swap = ((swap >> 24) + (swap & 0xff0000) + (swap & 0xff00) + 
-			(swap & 0xff)) << 24;
-	return swap;
-}
 int rotate3ByteInt(int swap)
 {
 	swap = ((swap >> 16) + (swap & 0xff00) + (swap & 0xff)) << 16;

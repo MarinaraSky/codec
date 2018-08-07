@@ -309,6 +309,11 @@ unsigned char * printZerg(unsigned char *zergHeader)
 						case(7):
 							{
 								int repeatSequenceId = 0;
+								for(int i = 0; i < 4; i++)
+								{
+									repeatSequenceId = repeatSequenceId << 8;
+									repeatSequenceId |= param2[i];
+								}
 								printf("Parameter2: %d", repeatSequenceId);
 								break;
 							}
@@ -379,9 +384,9 @@ unsigned char * printZerg(unsigned char *zergHeader)
 				printf("Long: %s\n", fancyLongitude);
 				printf("Lat: %s\n", fancyLatitude);
 				printf("Alt: %f fathoms\n", fAltitude);
-				printf("Bearing: %f\u00B0\n", fBearing);
+				printf("Bearing: %f \u00B0\n", fBearing);
 				printf("Speed: %f m\\s\n", fSpeed);
-				printf("Acc: %fm\n", fAccuracy);
+				printf("Acc: %f m\n", fAccuracy);
 
 				break;
 			}
