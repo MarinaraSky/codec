@@ -65,7 +65,7 @@ typedef struct udpHeader
 	short sourcePort;
 	short destPort;
 	short length;
-	short checksum;
+	unsigned short checksum;
 }udpHeader;
 
 typedef struct payload
@@ -150,7 +150,11 @@ int main(int argc, char *argv[])
 		dest = fopen(argv[2], "wb");
 		source = fopen(argv[1], "r");
 		writePcapHeader(dest);
-		readZerg(source, dest);
+		while(!feof(source))
+		{
+			zergPayloadSize = 0;
+			readZerg(source, dest);
+		}
 		fclose(dest);
 		fclose(source);
 	}
@@ -344,7 +348,7 @@ void writeCommand(FILE *source, FILE *dest)
 			fwrite(command, sizeof(int) * 2, 1, dest);
 			break;
 		default:
-			fwrite(command, sizeof(char) * 2, 1, dest);
+			fwrite(command, sizeof(char) * 6, 1, dest);
 			break;
 	}
 }
@@ -422,10 +426,10 @@ void writePcapHeader(FILE *dest)
 void writePcapPacket(FILE *dest, int zergLength)
 {
 	pcapPacketHeader *header = calloc(sizeof(pcapPacketHeader), 1);
-	header->unixEpoch = 0;
-	header->microEpoch = 0;
+	header->unixEpoch = 0x11111111;
+	header->microEpoch = 0x11111111;
 	header->lengthOfData = zergLength + 42;
-	header->fullLength = 0;
+	header->fullLength = 0x11111111;
 	fwrite(header, sizeof(int) * 4, 1, dest);
 	free(header);
 }
@@ -445,6 +449,7 @@ void writeIpv4Header(FILE *dest, int zergLength)
 	header->ipHeaderLength = 0x5;
 	header->ipLength = htons(zergLength + 28);
 	header->protocol = 0x11;
+	header->destIp = 0x22222222;
 	fwrite(header, sizeof(int) * 5, 1, dest);
 	free(header);
 }	
@@ -454,6 +459,7 @@ void writeUdpHeader(FILE *dest, int zergLength)
 	udpHeader *header = calloc(sizeof(udpHeader), 1);	
 	header->destPort = htons(0xea7);
 	header->length = htons(zergLength + 8);
+	header->checksum = 0xefbe;
 	fwrite(header, sizeof(int) * 2, 1, dest);
 	free(header);
 }

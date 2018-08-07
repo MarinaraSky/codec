@@ -135,6 +135,7 @@ void parseCapture(FILE *psychicCapture)
 	while(input.zergHeader != NULL)
 	{
 		input.zergHeader = printZerg(input.zergHeader);
+		printf("\n");
 	}
 	free(input.ipv4Header);
 	free(input.udpHeader);
@@ -257,7 +258,7 @@ unsigned char * printZerg(unsigned char *zergHeader)
 				{
 					command += payload[i];
 				}
-				printf("Command: %d %s\n", command, commandList[command]);
+				printf("Command: %d %s", command, commandList[command]);
 				if(command % 2 == 1)
 				{
 					unsigned char *param1 = calloc(2, 1);
@@ -285,7 +286,7 @@ unsigned char * printZerg(unsigned char *zergHeader)
 									distance = distance << 8;
 									distance |= param1[i];
 								}
-								printf("Parameter1: %hd\nParameter2: %f\n",
+								printf("\nParameter1: %hd\nParameter2: %f\n",
 										distance, newBearing);
 								break;
 							}
@@ -303,7 +304,7 @@ unsigned char * printZerg(unsigned char *zergHeader)
 									groupId = groupId << 8;
 									groupId |= param2[i];
 								}
-								printf("Parameter1: %d\nParameter2: %d", addOrRemove, groupId);
+								printf("\nParameter1: %d\nParameter2: %d", addOrRemove, groupId);
 								break;
 							}
 						case(7):
@@ -314,7 +315,7 @@ unsigned char * printZerg(unsigned char *zergHeader)
 									repeatSequenceId = repeatSequenceId << 8;
 									repeatSequenceId |= param2[i];
 								}
-								printf("Parameter2: %d", repeatSequenceId);
+								printf("\nParameter2: %d", repeatSequenceId);
 								break;
 							}
 						free(param1);
