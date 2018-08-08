@@ -1,7 +1,6 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <wchar.h>
 
 void parseCapture(FILE *psychicCapture);
 float hexToFloat(unsigned char *charArray);
@@ -391,6 +390,7 @@ unsigned char * printZerg(unsigned char *zergHeader)
 
 				break;
 			}
+
 	}
 	free(payload);
 	unsigned char *endOfCurrentPacket = NULL;
