@@ -1,22 +1,12 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include "zergStructs.h"
+#include "zergProtos.h"
 
-void parseCapture(FILE *psychicCapture);
 float hexToFloat(unsigned char *charArray);
 double longHexToDouble(unsigned char *charArray);
 unsigned char *printZerg(unsigned char *zergHeader);
-
-typedef struct pscyhicPacket
-{
-	unsigned char *fileHeader;
-	unsigned char *packetHeader;
-	unsigned char *ethernetFrame;
-	unsigned char *ipv4Header;
-	unsigned char *udpHeader;
-	unsigned char *zergHeader;
-	unsigned char *payload;
-}psychicPacket;
 
 int main(int argc, char *argv[])
 {
@@ -29,15 +19,28 @@ int main(int argc, char *argv[])
 			printf("Cannot open %s\n", argv[1]);
 			exit(1);
 		}
-		parseCapture(psychicCapture);
+		fseek(psychicCapture, 24, SEEK_CUR);
+		while(!feof(psychicCapture))
+		{
+			if(getc(psychicCapture) == EOF)
+			{
+				break;
+			}
+			else
+			{
+				fseek(psychicCapture, -1, SEEK_CUR);
+			}
+			parseCapture(psychicCapture);
+		}
 		fclose(psychicCapture);
 	}
 	return 0;
 }
 
+/*
 void parseCapture(FILE *psychicCapture)
 {
-	int buff[2];
+	int buff[2] = 0;
 	int i = 0;
 	unsigned int j = 0;
 	psychicPacket input;
@@ -56,7 +59,6 @@ void parseCapture(FILE *psychicCapture)
 	while(!feof(psychicCapture))
 	{
 		fread(buff, 1, 1, psychicCapture);
-		/*
 		if(i < 24)
 		{
 			input.fileHeader[i] = *buff;	
@@ -69,7 +71,6 @@ void parseCapture(FILE *psychicCapture)
 		{
 			input.ethernetFrame[i - 40] = *buff;
 		}
-		*/
 		if(i < 74 && i > 53)
 		{
 			input.ipv4Header[i - 54] = *buff;
@@ -111,7 +112,8 @@ void parseCapture(FILE *psychicCapture)
 			input.zergHeader[j] = *buff;
 			if(i - 82 == 3)
 			{
-				for(int x = 0; x < 4; x++)
+				zergHeaderLength = 0;
+				for(int x = 1; x < 4; x++)
 				{
 					zergHeaderLength = zergHeaderLength << 8;
 					zergHeaderLength |= input.zergHeader[x];
@@ -122,9 +124,8 @@ void parseCapture(FILE *psychicCapture)
 			if(j == zergHeaderLength * multiplier)
 			{
 				multiplier++;
-				zergHeaderLength *= multiplier;
 				input.zergHeader = realloc(input.zergHeader,
-						zergHeaderLength);	
+						zergHeaderLength * multiplier);	
 			}	
 			j++;
 		}
@@ -198,12 +199,10 @@ unsigned char * printZerg(unsigned char *zergHeader)
 	{
 		case 0:
 			j = 0;
-			/*
 			for(int i = 0; i < zergPacketSize - 12; i++)
 			{
 				printf("%c\n", payload[i]);
 			}
-			*/
 			printf("%s\n", payload);
 			break;
 		case 1:
@@ -404,6 +403,7 @@ unsigned char * printZerg(unsigned char *zergHeader)
 	}
 	return endOfCurrentPacket;
 }
+*/
 
 float hexToFloat(unsigned char *charArray)
 {

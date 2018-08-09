@@ -29,6 +29,13 @@ int main(int argc, char *argv[])
 			printf("Could not open %s. Exiting.\n", argv[1]);
 			exit(1);
 		}
+		char buff = 0;
+		buff = fgetc(source);
+		if(buff != 'V')
+		{
+			fileCorruption();
+		}
+		fseek(source, 0, SEEK_SET);
 		writePcapHeader(dest);
 		do
 		{

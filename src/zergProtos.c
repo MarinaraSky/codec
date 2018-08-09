@@ -64,7 +64,14 @@ void checkEntry(char string[16], unsigned int input, zergPacket *packet)
 
 void pickPacketType(FILE *source, FILE *dest, zergPacket *packet) 
 {
-	writePcapPacket(dest, packet->totalLength);
+	if(packet->type == 2)
+	{
+		writePcapPacket(dest, packet->totalLength + 4);
+	}
+	else
+	{
+		writePcapPacket(dest, packet->totalLength);
+	}
 	writeEtherHeader(dest);
 	writeIpv4Header(dest, packet->totalLength);
 	writeUdpHeader(dest, packet->totalLength);
@@ -145,20 +152,13 @@ void writeStatus(FILE *source, FILE *dest)
 		}
 		else if(strcmp("Speed:", string) == 0)
 		{
-			union speed
-			{
-				float fSpeed;
-				int iSpeed;
-			};
-			union speed s;
 			fscanNum = fscanf(source, "%s", string);
 			if(fscanNum != 1)
 			{
 				fileCorruption();
 			}
-			s.fSpeed = strtof(string, NULL);
-			s.iSpeed = htonl(s.iSpeed);
-			status->speed = s.fSpeed;
+			status->sSpeed.fSpeed = strtof(string, NULL);
+			status->sSpeed.iSpeed = htonl(status->sSpeed.iSpeed);
 		}	
 		if(strcmp("Health:", string) == 0)
 		{
@@ -191,7 +191,6 @@ void writeStatus(FILE *source, FILE *dest)
 				grab = fgetc(source);
 				if(grab == EOF)
 				{
-					printf("here\n");
 					fileCorruption();
 				}
 				fputc(grab, dest);
@@ -503,3 +502,448 @@ int validateHeader(zergPacket *packet)
 	}
 	return 1;
 }
+
+void parseCapture(FILE *psychicCapture)
+{
+	unsigned int ipTotalLength = 0;
+	unsigned int udpTotalLength = 0;
+	readPcapPacket(psychicCapture);
+	readEthernetPacket(psychicCapture);
+	readIpv4Packet(psychicCapture, &ipTotalLength);
+	readUdpPacket(psychicCapture, &udpTotalLength);
+	readZergPacket(psychicCapture, &udpTotalLength);
+	printf("\n");
+}
+
+void readPcapPacket(FILE *psychicCapture)
+{
+	unsigned char buff = 0;
+	int i = 0;
+	pcapPacketHeader *header = calloc(sizeof(pcapPacketHeader), 1);
+
+	while(i < 16)
+	{
+		buff = getc(psychicCapture);
+		if(i < 4)
+		{
+			hexToInt(&header->unixEpoch, buff);
+		}
+		else if(i < 8)
+		{	
+			hexToInt(&header->microEpoch, buff);
+		}	
+		else if(i < 12)
+		{
+			hexToInt(&header->lengthOfData, buff);
+		}
+		else if(i < 16)
+		{
+			hexToInt(&header->fullLength, buff);
+		}
+		i++;
+	}
+	free(header);
+}
+
+void readEthernetPacket(FILE *psychicCapture)
+{
+	unsigned char buff = 0;
+	int i = 0;
+	ethernetHeader *header = calloc(sizeof(ethernetHeader), 1);
+	
+	while(i < 15)
+	{
+		buff = getc(psychicCapture);
+		if(i < 6)
+		{
+			header->sourceMac[i] = buff;
+		}
+		else if(i < 12)
+		{
+			header->destMac[i - 6] = buff;
+		}
+		else if(i < 14)
+		{
+			hexToShort(&header->etherType, buff);
+		}
+		i++;
+	}
+	free(header);
+}
+
+void hexToInt(unsigned int *myInt, unsigned char hex)
+{
+	*myInt <<= 8;
+	*myInt |= hex;
+}
+
+void hexToShort(unsigned short *myShort, unsigned char hex)
+{
+	*myShort <<= 8;
+	*myShort |= hex;
+}
+
+void hexToDouble(unsigned long long *myLong, unsigned char hex)
+{
+	*myLong <<= 8;
+	*myLong |= hex;
+}
+
+void readIpv4Packet(FILE *psychicCapture, unsigned int *ipTotalLength)
+{
+	unsigned char buff = 0;
+	int i = 0;
+	ipv4Header *header = calloc(sizeof(ipv4Header), 1);
+	fseek(psychicCapture, -1, SEEK_CUR);
+
+	while(i < 20)
+	{
+		buff = getc(psychicCapture);
+		if(i == 0)
+		{
+			header->ipHeaderLength = buff & 0xf;
+			buff = buff >> 4;
+			header->version = buff & 0xf;
+			if((header->version & 0x4) != 0x4)
+			{
+				printf("%ld\n", ftell(psychicCapture));
+				printf("Not Ipv4\n");
+				exit(1);
+			}
+			if((header->ipHeaderLength & 0x5) == 0x5)
+			{
+				/* no Ip Options */
+			}
+		}
+		else if(i == 1)
+		{
+			header->dscp = buff;
+		}
+		else if(i < 4)
+		{
+			hexToShort(&header->ipLength, buff);
+			*ipTotalLength = header->ipLength;
+		}
+		else if(i < 6)
+		{
+			hexToShort(&header->id, buff);
+		}
+		else if(i < 8)
+		{
+			hexToShort(&header->flags, buff);
+		}
+		else if(i == 8)
+		{
+			header->ttl = buff;
+		}
+		else if(i == 9)
+		{
+			header->protocol = buff;
+		}
+		else if(i < 12)
+		{
+			hexToShort(&header->checksum, buff);
+		}
+		else if(i < 16)
+		{
+			hexToInt(&header->sourceIp, buff);
+		}
+		else if(i < 20)
+		{
+			hexToInt(&header->destIp, buff);
+		}
+		i++;
+	}
+	free(header);
+}
+
+void readUdpPacket(FILE *psychicCapture, unsigned int *udpTotalLength)
+{
+	unsigned char buff = 0;
+	int i = 0;
+	udpHeader *header = calloc(sizeof(udpHeader), 1);
+
+	while(i < 8)
+	{
+		buff = getc(psychicCapture);
+		if(i < 2)
+		{
+			hexToShort(&header->sourcePort, buff);
+		}
+		else if(i < 4)
+		{
+			hexToShort(&header->destPort, buff);
+		}
+		else if(i < 6)
+		{
+			hexToShort(&header->length, buff);
+			*udpTotalLength = header->length;
+		}
+		else if(i < 8)
+		{
+			hexToShort(&header->checksum, buff);
+		}
+		i++;
+	}
+	free(header);
+}
+
+void readZergPacket(FILE *psychicCapture, unsigned int *udpTotalLength)
+{
+	unsigned char buff = 0;
+	int i = 0;
+	unsigned int intTotalLength = 0;
+	const char *messageType[] =  {"MESSAGE", "STATUS", 
+		"COMMAND", "GPS"};
+	zergPacket *packet = calloc(sizeof(zergPacket), 1);
+	while(i < 12)
+	{
+		buff = getc(psychicCapture);
+		if(i == 0)
+		{
+			packet->type = buff & 0xf;
+			buff = buff >> 4;
+			packet->version = buff & 0xf;
+			if((packet->version & 0x1) == 0x1)
+			{
+				printf("Version: 1\n");
+			}
+			else
+			{
+				printf("%ld\n", ftell(psychicCapture));
+				printf("Unknown Version\n");
+				fileCorruption();
+			}
+			if(packet->type > 3)
+			{
+				printf("Unknown Type\n");
+				fileCorruption();
+			}
+		}
+		else if( i < 4)
+		{
+			hexToInt(&intTotalLength, buff);
+		}
+		else if(i < 6)
+		{
+			hexToShort(&packet->sourceId, buff);
+		}
+		else if(i < 8)
+		{
+			hexToShort(&packet->destinationId, buff);
+		}
+		else if(i < 12)
+		{
+			hexToInt(&packet->sequenceId, buff);
+		}
+		i++;
+	}
+	packet->totalLength |= intTotalLength;
+	printf("Type: %d %s\n", packet->type, messageType[packet->type]);
+	if(packet->type > 3)
+	{
+		printf("Unkown Type\n");
+		fileCorruption();
+	}
+	printf("Size: %d\n", packet->totalLength);
+	packet->totalLength -= 12;
+	printf("From: %d\n", packet->sourceId);
+	printf("To: %d\n", packet->destinationId);
+	printf("Sequence: %u\n", packet->sequenceId);
+	switch(packet->type)
+	{
+		case 0:
+			readMessage(psychicCapture, packet->totalLength);
+			break;
+		case 1:
+			readStatus(psychicCapture, packet->totalLength);
+			break;
+		case 2:
+			readCommand(psychicCapture);
+			break;
+		case 3:
+			readGPS(psychicCapture);
+			break;
+	}
+	free(packet);
+}
+
+void readMessage(FILE *psychicCapture, unsigned int payloadLength)
+{
+	for(unsigned int i = 0; i < payloadLength; i++)
+	{
+		printf("%c", getc(psychicCapture));
+	}
+	printf("\n");
+}
+
+void readStatus(FILE *psychicCapture, unsigned int payloadLength)
+{
+	unsigned int intCurrHit = 0;
+	unsigned int intMaxHit = 0;
+	unsigned int i = 0;
+	unsigned char buff = 0;
+	const char *types[] = {"Overmind", "Larva", "Cerebrate", 
+		"Overlord",	"Queen", "Drone", "Zergling", "Lurker", 
+		"Brooding", "Hydralisk", "Guardian", "Scourge", 
+		"Ultralisk", "Mutalisk", "Defilier", "Devourer"};
+	payload *status = calloc(sizeof(payload), 1);
+	
+	for(; i < 12; i++)
+	{
+		buff = getc(psychicCapture);
+		if(i < 3)
+		{
+			hexToInt(&intCurrHit, buff);	
+		}
+		else if(i == 3)
+		{
+			status->armor = buff;	
+		}
+		else if(i < 7)
+		{
+			hexToInt(&intMaxHit, buff);
+		}
+		else if(i == 7)
+		{
+			status->type = buff;
+		}
+		else if(i < 12) 
+		{
+			hexToInt(&status->sSpeed.iSpeed, buff);
+		}
+	}
+	status->currHitPoints |= intCurrHit;
+	status->maxHitPoints |= intMaxHit;
+	printf("Zerg Type: %d %s\n", status->type, types[status->type]);
+	printf("Speed: %f m/s\n", status->sSpeed.fSpeed);
+	printf("Health: %d/%d\n", status->currHitPoints, status->maxHitPoints); 
+	printf("Armor: %d\n", status->armor);
+	printf("Name: ");
+	while(i < payloadLength)
+	{
+		printf("%c", getc(psychicCapture));
+		i++;
+	}
+	printf("\n");
+	free(status);
+}
+
+void readCommand(FILE *psychicCapture)
+{
+	unsigned char buff = 0;
+	int i = 0;
+	const char *commands[] = {"GET_STATUS", "GOTO", "GET_GPS",
+		"RESERVED", "RETURN", "SET_GROUP", "STOP", "REPEAT"};
+	cPayload *command = calloc(sizeof(cPayload), 1);
+
+	for(; i < 2; i++)
+	{
+		buff = getc(psychicCapture);
+		hexToShort(&command->command, buff);
+	}
+	if(command->command > 7)
+	{
+		printf("Bad Command\n");
+		fileCorruption();
+	}
+	printf("Command: %d %s\n", command->command, 
+			commands[command->command]);
+	switch(command->command)
+	{
+		case 1:
+			for(; i < 4; i++)
+			{
+				buff = getc(psychicCapture);
+				hexToShort(&command->param1, buff);
+			}
+			for(; i < 8; i++)
+			{
+				buff = getc(psychicCapture);
+				hexToInt(&command->param2.uiParam2, buff);
+			}	
+			printf("Parameter1: %d\n", command->param1);
+			printf("Parameter2: %f\n", command->param2.fParam2);
+			break;
+		case 5:
+			for(; i < 4; i++)
+			{
+				buff = getc(psychicCapture);
+				hexToShort(&command->param1, buff);
+			}
+			for(; i < 8; i++)
+			{
+				buff = getc(psychicCapture);
+				hexToInt(&command->param2.uiParam2, buff);
+			}	
+			printf("Parameter1: %d\n", command->param1);
+			printf("Parameter2: %d\n", command->param2.iParam2);
+			break;
+		case 7:
+			for(; i < 8; i++)
+			{
+				if(i < 4)
+				{
+					continue;
+				}
+				else
+				{
+					buff = getc(psychicCapture);
+					hexToInt(&command->param2.uiParam2, buff);
+				}
+			}
+			printf("Parameter2: %d\n", command->param2.uiParam2);
+			break;
+		default:
+			fseek(psychicCapture, 4, SEEK_CUR);
+			break;
+	}
+	free(command);
+}
+
+void readGPS(FILE *psychicCapture)
+{
+	unsigned char buff = 0;
+	int i = 0;
+	gpsPayload *gps = calloc(sizeof(gpsPayload), 1);
+
+	while(i < 32)
+	{
+		buff = getc(psychicCapture);
+		if(i < 8)
+		{
+			hexToDouble(&gps->longitude.iLong, buff);
+		}
+		else if(i < 16)
+		{
+			hexToDouble(&gps->latitude.iLat, buff);
+		}
+		else if(i < 20)
+		{
+			hexToInt(&gps->altitude.iAltitude, buff);
+		}
+		else if(i < 24)
+		{
+			hexToInt(&gps->bearing.iBearing, buff);
+		}
+		else if(i < 28)
+		{
+			hexToInt(&gps->speed.iSpeed, buff);
+		}
+		else if(i < 32)
+		{
+			hexToInt(&gps->accuracy.iAccuracy, buff);
+		}
+		i++;
+	}
+	printf("Long: %lf\n", gps->longitude.dLong);
+	printf("Lat: %lf\n", gps->latitude.dLat);
+	printf("Alt: %f fathoms\n", gps->altitude.fAltitude);
+	printf("Bearing: %f \u00B0\n", gps->bearing.fBearing);
+	printf("Speed: %f m\\s\n", gps->speed.fSpeed);
+	printf("Acc: %f m\n", gps->accuracy.fAccuracy);
+	free(gps);
+}
+
+
+
