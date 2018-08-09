@@ -114,6 +114,8 @@ void writeMessage(FILE *source, FILE *dest)
 		grab = fgetc(source);
 		if(grab == EOF)
 		{
+			fclose(source);
+			fclose(dest);
 			fileCorruption();
 		}
 		fputc(grab, dest);
@@ -139,6 +141,9 @@ void writeStatus(FILE *source, FILE *dest)
 		fscanNum = fscanf(source, "%s", string);
 		if(fscanNum != 1)
 		{
+			free(status);
+			fclose(source);
+			fclose(dest);
 			fileCorruption();
 		}
 		if(strcmp("Type:", string) == 0)
@@ -146,6 +151,9 @@ void writeStatus(FILE *source, FILE *dest)
 			fscanNum = fscanf(source, "%d", &type);
 			if(fscanNum != 1)
 			{
+				free(status);
+				fclose(source);
+				fclose(dest);
 				fileCorruption();
 			}
 			status->type = type & 0xff;
@@ -155,6 +163,9 @@ void writeStatus(FILE *source, FILE *dest)
 			fscanNum = fscanf(source, "%s", string);
 			if(fscanNum != 1)
 			{
+				free(status);
+				fclose(source);
+				fclose(dest);
 				fileCorruption();
 			}
 			status->sSpeed.fSpeed = strtof(string, NULL);
@@ -165,6 +176,9 @@ void writeStatus(FILE *source, FILE *dest)
 			fscanNum = fscanf(source, "%d/%d", &health, &maxHealth);
 			if(fscanNum != 2)
 			{
+				free(status);
+				fclose(source);
+				fclose(dest);
 				fileCorruption();
 			}
 			status->currHitPoints |= health;
@@ -177,6 +191,9 @@ void writeStatus(FILE *source, FILE *dest)
 			fscanNum = fscanf(source, "%d", &armor);
 			if(fscanNum != 1)
 			{
+				free(status);
+				fclose(source);
+				fclose(dest);
 				fileCorruption();
 			}
 			status->armor = armor & 0xff;
@@ -191,6 +208,9 @@ void writeStatus(FILE *source, FILE *dest)
 				grab = fgetc(source);
 				if(grab == EOF)
 				{
+					free(status);
+					fclose(source);
+					fclose(dest);
 					fileCorruption();
 				}
 				fputc(grab, dest);
@@ -216,6 +236,9 @@ void writeCommand(FILE *source, FILE *dest)
 	fscanNum = fscanf(source, "%s %hd %s", string, &input, garbage);
 	if(fscanNum != 3)
 	{
+		free(command);
+		fclose(source);
+		fclose(dest);
 		fileCorruption();
 	}
 	if(strcmp("Command:", string) == 0)
@@ -226,6 +249,9 @@ void writeCommand(FILE *source, FILE *dest)
 		}
 		else
 		{
+			free(command);
+			fclose(source);
+			fclose(dest);
 			fileCorruption();
 		}
 	}		
@@ -235,6 +261,9 @@ void writeCommand(FILE *source, FILE *dest)
 			fscanNum = fscanf(source, "%s %hd", string, &input);
 			if(fscanNum != 2)
 			{
+				free(command);
+				fclose(source);
+				fclose(dest);
 				fileCorruption();
 			}
 			command->param1 = htons(input);
@@ -242,6 +271,9 @@ void writeCommand(FILE *source, FILE *dest)
 			fscanNum = fscanf(source, "%s %f", string, &fInput);
 			if(fscanNum != 2)
 			{
+				free(command);
+				fclose(source);
+				fclose(dest);
 				fileCorruption();
 			}
 			command->param2.fParam2 = fInput;
@@ -252,12 +284,18 @@ void writeCommand(FILE *source, FILE *dest)
 			fscanNum = fscanf(source, "%s %hd", string, &input);
 			if(fscanNum != 2)
 			{
+				free(command);
+				fclose(source);
+				fclose(dest);
 				fileCorruption();
 			}
 			command->param1 = htons(input & 0x1);
 			fscanNum = fscanf(source, "%s %d", string, &intInput);
 			if(fscanNum != 2)
 			{
+				free(command);
+				fclose(source);
+				fclose(dest);
 				fileCorruption();
 			}
 			command->param2.iParam2 = htonl(intInput);
@@ -267,6 +305,9 @@ void writeCommand(FILE *source, FILE *dest)
 			fscanNum = fscanf(source, "%s %d", string, &intInput);
 			if(fscanNum != 2)
 			{
+				free(command);
+				fclose(source);
+				fclose(dest);
 				fileCorruption();
 			}
 			command->param2.iParam2 = htonl(intInput);
@@ -297,6 +338,9 @@ void writeGPS(FILE *source, FILE *dest)
 		fscanNum = fscanf(source, "%s", string);
 		if(fscanNum != 1)
 		{
+			free(gpsCoords);
+			fclose(source);
+			fclose(dest);
 			fileCorruption();
 		}
 		if(strcmp("Long:", string) == 0)
@@ -304,6 +348,9 @@ void writeGPS(FILE *source, FILE *dest)
 			fscanNum = fscanf(source, "%lf", &dInput);
 			if(fscanNum != 1)
 			{
+				free(gpsCoords);
+				fclose(source);
+				fclose(dest);
 				fileCorruption();
 			}
 			gpsCoords->longitude.dLong = dInput;
@@ -315,6 +362,9 @@ void writeGPS(FILE *source, FILE *dest)
 			fscanNum = fscanf(source, "%lf", &dInput);
 			if(fscanNum != 1)
 			{
+				free(gpsCoords);
+				fclose(source);
+				fclose(dest);
 				fileCorruption();
 			}
 			gpsCoords->latitude.dLat = dInput;
@@ -325,6 +375,9 @@ void writeGPS(FILE *source, FILE *dest)
 			fscanNum = fscanf(source, "%f %s", &fInput, garbage);
 			if(fscanNum != 2)
 			{
+				free(gpsCoords);
+				fclose(source);
+				fclose(dest);
 				fileCorruption();
 			}
 			gpsCoords->altitude.fAltitude = fInput;
@@ -336,6 +389,9 @@ void writeGPS(FILE *source, FILE *dest)
 			fscanNum = fscanf(source, "%f %s", &fInput, garbage);
 			if(fscanNum != 2)
 			{
+				free(gpsCoords);
+				fclose(source);
+				fclose(dest);
 				fileCorruption();
 			}
 			gpsCoords->bearing.fBearing = fInput;
@@ -347,6 +403,9 @@ void writeGPS(FILE *source, FILE *dest)
 			fscanNum = fscanf(source, "%f %s", &fInput, garbage);
 			if(fscanNum != 2)
 			{
+				free(gpsCoords);
+				fclose(source);
+				fclose(dest);
 				fileCorruption();
 			}
 			gpsCoords->speed.fSpeed = fInput;
@@ -357,6 +416,9 @@ void writeGPS(FILE *source, FILE *dest)
 			fscanNum = fscanf(source, "%f %s", &fInput, garbage);
 			if(fscanNum != 2)
 			{
+				free(gpsCoords);
+				fclose(source);
+				fclose(dest);
 				fileCorruption();
 			}
 			gpsCoords->accuracy.fAccuracy = fInput;
@@ -515,6 +577,57 @@ void parseCapture(FILE *psychicCapture)
 	printf("\n");
 }
 
+void readPcapHeader(FILE *psychicCapture)
+{
+	unsigned char buff = 0;
+	int i = 0;
+	pcapFileHeader *header = calloc(sizeof(pcapFileHeader), 1);
+
+	while(i < 24)
+	{
+		buff = getc(psychicCapture);
+		if(i < 4)
+		{
+			hexToInt(&header->fileTypeId, buff);
+		}
+		else if(i < 6)
+		{
+			hexToShort(&header->majorVersion, buff);
+		}
+		else if(i < 8)
+		{
+			hexToShort(&header->minorVersion, buff);
+		}
+		else if(i < 12)
+		{
+			hexToInt(&header->gmtOffset, buff);
+		}
+		else if(i < 16)
+		{
+			hexToInt(&header->accDelta, buff);
+		}
+		else if(i < 20)
+		{
+			hexToInt(&header->maxLength, buff);
+		}
+		else if(i < 24)
+		{
+			hexToInt(&header->linkLayerType, buff);
+		}
+		i++;
+	}
+	if(header->fileTypeId != 0xd4c3b2a1 || header->majorVersion != 0x0200 ||
+			header->minorVersion != 0x0400 || header->linkLayerType != 
+			0x1000000)
+	{
+		printf("Pcap Header is invalid.\n");
+		free(header);
+		fclose(psychicCapture);
+		fileCorruption();
+	}
+	free(header);
+}
+
 void readPcapPacket(FILE *psychicCapture)
 {
 	unsigned char buff = 0;
@@ -542,6 +655,13 @@ void readPcapPacket(FILE *psychicCapture)
 		}
 		i++;
 	}
+	if(header->lengthOfData == 0)
+	{
+		free(header);
+		fclose(psychicCapture);
+		printf("Pcap Packet length is invalid.\n");
+		fileCorruption();
+	}
 	free(header);
 }
 
@@ -567,6 +687,13 @@ void readEthernetPacket(FILE *psychicCapture)
 			hexToShort(&header->etherType, buff);
 		}
 		i++;
+	}
+	if(header->etherType != 0x0800)
+	{
+		printf("EtherType is invalid.\n");
+		free(header);
+		fclose(psychicCapture);
+		fileCorruption();
 	}
 	free(header);
 }
@@ -606,9 +733,10 @@ void readIpv4Packet(FILE *psychicCapture, unsigned int *ipTotalLength)
 			header->version = buff & 0xf;
 			if((header->version & 0x4) != 0x4)
 			{
-				printf("%ld\n", ftell(psychicCapture));
 				printf("Not Ipv4\n");
-				exit(1);
+				fclose(psychicCapture);
+				free(header);
+				fileCorruption();
 			}
 			if((header->ipHeaderLength & 0x5) == 0x5)
 			{
@@ -653,6 +781,13 @@ void readIpv4Packet(FILE *psychicCapture, unsigned int *ipTotalLength)
 			hexToInt(&header->destIp, buff);
 		}
 		i++;
+	}
+	if(header->protocol != 0x11)
+	{
+		printf("Not UDP Packet.\n");
+		fclose(psychicCapture);
+		free(header);
+		fileCorruption();
 	}
 	free(header);
 }
@@ -710,13 +845,16 @@ void readZergPacket(FILE *psychicCapture, unsigned int *udpTotalLength)
 			}
 			else
 			{
-				printf("%ld\n", ftell(psychicCapture));
 				printf("Unknown Version\n");
+				fclose(psychicCapture);
+				free(packet);
 				fileCorruption();
 			}
 			if(packet->type > 3)
 			{
 				printf("Unknown Type\n");
+				fclose(psychicCapture);
+				free(packet);
 				fileCorruption();
 			}
 		}
@@ -739,10 +877,19 @@ void readZergPacket(FILE *psychicCapture, unsigned int *udpTotalLength)
 		i++;
 	}
 	packet->totalLength |= intTotalLength;
+	if(*udpTotalLength - 8 != packet->totalLength)
+	{
+		printf("Size Irregulatity.\n");
+		fclose(psychicCapture);
+		free(packet);
+		fileCorruption();
+	}
 	printf("Type: %d %s\n", packet->type, messageType[packet->type]);
 	if(packet->type > 3)
 	{
 		printf("Unkown Type\n");
+		fclose(psychicCapture);
+		free(packet);
 		fileCorruption();
 	}
 	printf("Size: %d\n", packet->totalLength);
@@ -773,6 +920,11 @@ void readMessage(FILE *psychicCapture, unsigned int payloadLength)
 	for(unsigned int i = 0; i < payloadLength; i++)
 	{
 		printf("%c", getc(psychicCapture));
+	}
+	if(payloadLength == 0)
+	{
+		fseek(psychicCapture, 6, SEEK_CUR);
+		printf("<NO MESSAGE>");
 	}
 	printf("\n");
 }
@@ -822,7 +974,7 @@ void readStatus(FILE *psychicCapture, unsigned int payloadLength)
 	printf("Name: ");
 	while(i < payloadLength)
 	{
-		printf("%c", getc(psychicCapture));
+		printf("%c", fgetc(psychicCapture));
 		i++;
 	}
 	printf("\n");
@@ -845,6 +997,8 @@ void readCommand(FILE *psychicCapture)
 	if(command->command > 7)
 	{
 		printf("Bad Command\n");
+		fclose(psychicCapture);
+		free(command);
 		fileCorruption();
 	}
 	printf("Command: %d %s\n", command->command, 
@@ -884,7 +1038,7 @@ void readCommand(FILE *psychicCapture)
 			{
 				if(i < 4)
 				{
-					continue;
+					buff = getc(psychicCapture);
 				}
 				else
 				{
@@ -944,6 +1098,4 @@ void readGPS(FILE *psychicCapture)
 	printf("Acc: %f m\n", gps->accuracy.fAccuracy);
 	free(gps);
 }
-
-
 

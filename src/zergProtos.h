@@ -42,6 +42,8 @@ int validateHeader(zergPacket *packet);
 /***************DECODE FUNCTIONS*****************/
 void parseCapture(FILE *psychicCapture);
 
+void readPcapHeader(FILE *psychicCapture);
+
 void readPcapPacket(FILE *psychicCapture);
 
 void readEthernetPacket(FILE *psychicCapture);

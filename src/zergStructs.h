@@ -13,13 +13,13 @@ typedef struct zergPacket
 
 typedef struct pcapFileHeader
 {
-    int fileTypeId;
-    short int majorVersion;
-    short int minorVersion;
-    int gmtOffset;
-    int accDelta;
-    int maxLength;
-    int linkLayerType;
+    unsigned int fileTypeId;
+    unsigned short majorVersion;
+    unsigned short minorVersion;
+    unsigned int gmtOffset;
+    unsigned int accDelta;
+    unsigned int maxLength;
+    unsigned int linkLayerType;
 }pcapFileHeader;
 
 typedef struct pcapPacketHeader
