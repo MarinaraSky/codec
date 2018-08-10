@@ -50,6 +50,8 @@ void readEthernetPacket(FILE *psychicCapture);
 
 void readIpv4Packet(FILE *psychicCapture, unsigned int *ipTotalLength);
 
+void readIpv6Packet(FILE *psychicCaputre, unsigned int *ipTotalLength);
+
 void readUdpPacket(FILE *psychicCapture, unsigned int *udpTotalLength);
 
 void readZergPacket(FILE *psychicCapture, unsigned int *udpTotalLength);

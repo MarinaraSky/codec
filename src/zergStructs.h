@@ -39,7 +39,7 @@ typedef struct ethernetHeader
 
 typedef struct ipv4Header
 {
-    unsigned char ipHeaderLength: 4;
+    unsigned char ipHeaderLength :4;
     unsigned char version :4;
     unsigned char dscp;
     unsigned short ipLength;
@@ -51,6 +51,18 @@ typedef struct ipv4Header
     unsigned int sourceIp;
     unsigned int destIp;
 }ipv4Header;
+
+typedef struct ipv6Header
+{
+	unsigned char version :4;
+	unsigned char trafficClass;
+	unsigned int flowLabel :20;
+	unsigned short payloadLength;
+	unsigned char nextHeader;
+	unsigned char hopLimit;
+	unsigned char source[16];
+	unsigned char destination[16];
+}ipv6Header;
 
 typedef struct udpHeader
 {

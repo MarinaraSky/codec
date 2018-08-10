@@ -688,7 +688,7 @@ void readEthernetPacket(FILE *psychicCapture)
 		}
 		i++;
 	}
-	if(header->etherType != 0x0800)
+	if(header->etherType != 0x0800 && header->etherType != 0x86DD)
 	{
 		printf("EtherType is invalid.\n");
 		free(header);
@@ -731,6 +731,12 @@ void readIpv4Packet(FILE *psychicCapture, unsigned int *ipTotalLength)
 			header->ipHeaderLength = buff & 0xf;
 			buff = buff >> 4;
 			header->version = buff & 0xf;
+			if(header->version == 0x6)
+			{
+				fseek(psychicCapture, -1, SEEK_CUR);
+				readIpv6Packet(psychicCapture, ipTotalLength);
+				return;
+			}
 			if((header->version & 0x4) != 0x4)
 			{
 				printf("Not Ipv4\n");
@@ -792,6 +798,60 @@ void readIpv4Packet(FILE *psychicCapture, unsigned int *ipTotalLength)
 	free(header);
 }
 
+void readIpv6Packet(FILE *psychicCapture, unsigned int *ipTotalLength)
+{
+	unsigned char buff = 0;
+	int i = 0;
+	ipv6Header *header = calloc(sizeof(ipv6Header), 1);
+
+	while(i < 40)
+	{
+		buff = getc(psychicCapture);
+		if(i == 0)
+		{
+			header->version |= (buff << 8);
+			header->trafficClass |= buff & 0xf;
+			header->trafficClass <<= 4;
+		}
+		else if(i == 1)
+		{
+			header->trafficClass |= buff & 0xf0;
+			header->flowLabel |= buff & 0xf;
+			header->flowLabel <<= 4;
+		}
+		else if(i < 4)
+		{
+			header->flowLabel |= buff;
+			if(i == 2)
+			{
+				header->flowLabel <<= 8;
+			}
+		}
+		else if(i < 6)
+		{
+			hexToShort(&header->payloadLength, buff);
+		}
+		else if(i < 7)
+		{
+			header->nextHeader = buff;
+		}
+		else if(i < 8)
+		{
+			header->hopLimit = buff;	
+		}
+		else if(i < 24)
+		{
+			header->source[i - 8] = buff;
+		}
+		else if(i < 40)
+		{
+			header->destination[i - 24] = buff;
+		}
+		i++;
+	}
+	*ipTotalLength = header->payloadLength;
+}
+
 void readUdpPacket(FILE *psychicCapture, unsigned int *udpTotalLength)
 {
 	unsigned char buff = 0;
@@ -813,6 +873,7 @@ void readUdpPacket(FILE *psychicCapture, unsigned int *udpTotalLength)
 		{
 			hexToShort(&header->length, buff);
 			*udpTotalLength = header->length;
+			//check to make sure this is right based of IP header
 		}
 		else if(i < 8)
 		{
