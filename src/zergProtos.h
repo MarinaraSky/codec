@@ -40,46 +40,36 @@ void fileCorruption(void);
 int validateHeader(zergPacket *packet);
 
 /***************DECODE FUNCTIONS*****************/
+/* Used as a hub to call the other read functions */
 void parseCapture(FILE *psychicCapture);
-
+/* Reads the Pcap File header, contains a way to check  */
+/* validity for both big endian and little endian		*/
 void readPcapHeader(FILE *psychicCapture);
-
+/* Reads Pcap packet header */
 void readPcapPacket(FILE *psychicCapture);
-
+/* Reads Ethernet Packet Header */
 void readEthernetPacket(FILE *psychicCapture);
-
+/* Reads Ipv4 Packet Header */
 void readIpv4Packet(FILE *psychicCapture, unsigned int *ipTotalLength);
-
+/* Reads Ipv6 Packet Header */
 void readIpv6Packet(FILE *psychicCaputre, unsigned int *ipTotalLength);
-
-void readUdpPacket(FILE *psychicCapture, unsigned int *udpTotalLength);
-
+/* Reads UPD Packet Header */
+void readUdpPacket(FILE *psychicCapture, unsigned int *udpTotalLength,
+		unsigned int ipTotalLength);
+/* Reads Zerg Packet Header */
 void readZergPacket(FILE *psychicCapture, unsigned int *udpTotalLength);
-
+/* Prints Message to screen */
 void readMessage(FILE *psychicCapture, unsigned int payloadLength);
-
+/* Reads Status packet and prints to screen */
 void readStatus(FILE *psychicCapture, unsigned int payloadLength);
-
+/* Readas Command packet and prints to screen */
 void readCommand(FILE *psychicCapture);
-
+/* Reads GPS Packets and prints to screen */
 void readGPS(FILE *psychicCapture);
-
+/* Takes a char and bitwise manipulates it into an Int */
 void hexToInt(unsigned int *myInt, unsigned char hex);
-
+/* Takes a char and bitwise manipulates it into a short */ 
 void hexToShort(unsigned short *myShort, unsigned char hex);
-
+/* Takes a char and bitwise manipulates it into a double */
 void hexToDouble(unsigned long long *myLong, unsigned char hex);
-
-
-
-
-
-
-
-
-
-
-
-
-
 #endif

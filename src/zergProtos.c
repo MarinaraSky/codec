@@ -572,7 +572,7 @@ void parseCapture(FILE *psychicCapture)
 	readPcapPacket(psychicCapture);
 	readEthernetPacket(psychicCapture);
 	readIpv4Packet(psychicCapture, &ipTotalLength);
-	readUdpPacket(psychicCapture, &udpTotalLength);
+	readUdpPacket(psychicCapture, &udpTotalLength, ipTotalLength);
 	readZergPacket(psychicCapture, &udpTotalLength);
 	printf("\n");
 }
@@ -616,9 +616,13 @@ void readPcapHeader(FILE *psychicCapture)
 		}
 		i++;
 	}
-	if(header->fileTypeId != 0xd4c3b2a1 || header->majorVersion != 0x0200 ||
+	/* This gross if statement checks if the pcap header is valid in	*/
+	/* Big Endian or Little Endian										*/
+	if((header->fileTypeId != 0xd4c3b2a1 || header->majorVersion != 0x0200 ||
 			header->minorVersion != 0x0400 || header->linkLayerType != 
-			0x1000000)
+			0x1000000) &&(header->fileTypeId != 0xa1b2c3d4 || 
+			header->majorVersion != 0x2 || header->minorVersion != 0x4 || 
+			header->linkLayerType != 0x1))
 	{
 		printf("Pcap Header is invalid.\n");
 		free(header);
@@ -850,9 +854,18 @@ void readIpv6Packet(FILE *psychicCapture, unsigned int *ipTotalLength)
 		i++;
 	}
 	*ipTotalLength = header->payloadLength;
+	if(header->nextHeader != 0x11)
+	{
+		printf("Not a UDP Packet.\n");
+		fclose(psychicCapture);
+		free(header);
+		fileCorruption();
+	}
+	free(header);
 }
 
-void readUdpPacket(FILE *psychicCapture, unsigned int *udpTotalLength)
+void readUdpPacket(FILE *psychicCapture, unsigned int *udpTotalLength,
+		unsigned int ipTotalLength)
 {
 	unsigned char buff = 0;
 	int i = 0;
@@ -873,13 +886,19 @@ void readUdpPacket(FILE *psychicCapture, unsigned int *udpTotalLength)
 		{
 			hexToShort(&header->length, buff);
 			*udpTotalLength = header->length;
-			//check to make sure this is right based of IP header
 		}
 		else if(i < 8)
 		{
 			hexToShort(&header->checksum, buff);
 		}
 		i++;
+	}
+	if(header->length != ipTotalLength - 20)
+	{
+		printf("Sizes are off.\n");
+		fclose(psychicCapture);
+		free(header);
+		fileCorruption();
 	}
 	free(header);
 }
